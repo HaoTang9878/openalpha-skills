@@ -1,9 +1,9 @@
 ---
 name: openalpha
-version: "1.1.0"
-description: "Quant strategy platform monitoring via OpenAlpha CLI. ONE command `overview` answers: cross-exchange account equity, today PnL, strategy deployment performance (real executor equity curves), anomalies. Plus per-exchange balances, open positions, deployments, strategy market, factor library. Read-only by design: the API key cannot place orders or change anything — server-enforced. Use when: (1) OpenAlpha is mentioned (openalpha.top, 磐石/Panshi), (2) the user asks to check their quant/trading account, equity, positions, or strategy deployments — including generic phrasings like 'how is my account doing', '查账户', '盯盘', 'today PnL' — once this skill is installed, (3) browsing the strategy market or factor library, (4) scheduled portfolio monitoring / watchdog reporting. Do NOT activate for generic crypto education or trading on other platforms."
+version: "1.2.0"
+description: "Quant strategy platform via OpenAlpha CLI: monitoring (overview one-shot with server-side math, balances, positions, deployments, strategy market, factor library), platform AI Q&A with live account context (`ask`, billed per token), and scoped deployment control (`deploy stop|start`, --confirm required). Scopes are server-enforced: read (default) / ask / deploy — a key cannot do what its scope does not allow, and no key can place orders, move funds or change configuration. Use when: (1) OpenAlpha is mentioned (openalpha.top, 磐石/Panshi), (2) the user asks about their quant account/equity/positions/deployments ('how is my account doing', '查账户', '盯盘'), (3) asking the platform AI to analyze their account, (4) stopping/restarting a misbehaving deployment, (5) strategy market / factor research, (6) scheduled watchdog reporting. Do NOT activate for generic crypto education or trading on other platforms."
 homepage: https://openalpha.top
-metadata: { "version": "1.1.0" }
+metadata: { "version": "1.2.0" }
 ---
 
 # OpenAlpha — your agent's read-only window into a quant strategy platform
@@ -15,6 +15,21 @@ connect their own OKX/Binance accounts, deploy official or custom strategies,
 and the platform's executor rebalances on their exchanges. This skill gives an
 AI agent **read-only monitoring access**: equity, positions, deployments, the
 strategy market and the factor library.
+
+## Scopes: the key's powers are fixed at creation, server-side
+
+An OpenAlpha API key carries scopes, chosen when it is created (web settings
+page or device-code approval):
+
+- `read` — always included: everything monitoring (overview/balances/
+  positions/deployments/market/factors)
+- `ask` — platform AI Q&A via `ask`, billed per token from the user's
+  platform wallet (same wallet as the web AI)
+- `deploy` — exactly two endpoints: deployment stop / restart
+
+The backend rejects any non-GET request outside the key's scope allowlist.
+**No key can place orders, move funds, or edit configuration** — those live
+in the web UI with its own confirmation system.
 
 ## READ-ONLY is enforced by the server, not by politeness
 
@@ -87,6 +102,27 @@ All commands: `node {baseDir}/bin/openalpha <command> [args] [--json]`.
 | "browse strategy market" | `strategies` | `{baseDir}/references/strategies.md` |
 | "strategy X profile" | `strategy <id>` | `{baseDir}/references/strategies.md` |
 | "find a momentum factor" | `factors [query]` | `{baseDir}/references/strategies.md` |
+
+### AI Q&A (scope: ask)
+
+| Intent | Command | Reference |
+|--------|---------|-----------|
+| "ask the platform AI", "分析我的账户", account questions needing judgment | `ask "question"` | `{baseDir}/references/ask.md` |
+
+### Controlled actions (scope: deploy)
+
+| Intent | Command | Reference |
+|--------|---------|-----------|
+| "stop deployment X", "重启 X" | `deploy stop\|start <id> --confirm` | `{baseDir}/references/deploy.md` |
+
+**Two-message confirmation protocol (MANDATORY for deploy):**
+1. First reply: present a summary (deployment name, current status, what the
+   action does) and ask the user to confirm. **Do not run any command.**
+2. Only after the user explicitly agrees in a NEW message: run with
+   `--confirm`. If they change any detail, back to step 1.
+The CLI refuses to act without `--confirm` — that is the second lock; the
+first is this protocol. Never treat intent expressed in the same message as
+confirmation.
 
 ### Errors
 

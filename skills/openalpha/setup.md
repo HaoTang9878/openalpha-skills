@@ -13,7 +13,19 @@ The key is **read-only** — the OpenAlpha backend rejects every non-GET
 request made with it (equity/positions/deployments/strategy market/factor
 library only).
 
-## 2. Save the key (recommended: `login`)
+## 2. Recommended: device-code login (zero copy-paste)
+
+Ask the user to run (or run it yourself and relay the URL):
+
+```bash
+node {baseDir}/bin/openalpha login            # or: --scopes ask,deploy
+```
+
+The CLI prints a URL + code. The user opens it, logs in if asked, reviews
+the client name and requested scopes, clicks 批准. The CLI picks up the key
+automatically and saves it to `~/.openalpha/config.json` (mode 600).
+
+## 2b. Alternative: paste an existing key
 
 Ask the user to paste the key, then run:
 

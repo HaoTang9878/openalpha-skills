@@ -69,6 +69,7 @@ for (let i = 0; i < argv.length; i++) {
     else if (a === '--live') flags.live = true
     else if (a === '--demo') flags.demo = true
     else if (a === '--both') flags.both = true
+    else if (a === '--confirm') flags.confirm = true
     else if (a === '--key') { i++; flags.key = argv[i] }
     else if (a.startsWith('--')) { flags[a.slice(2)] = argv[i + 1]; i++ }
     else pos.push(a)
@@ -79,14 +80,20 @@ const BASE = (flags.baseUrl || DEFAULT_BASE_FINAL).replace(/\/+$/, '')
 
 // ---------- http ----------
 
-async function fetchOnce(key, urlPath) {
+async function fetchOnce(key, urlPath, opts) {
     const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
+    const timer = setTimeout(() => ctrl.abort(), opts && opts.timeoutMs || TIMEOUT_MS)
     try {
-        const res = await fetch(BASE + urlPath, {
-            headers: { Authorization: `Bearer ${key}` },
-            signal: ctrl.signal,
-        })
+        const init = { headers: {}, signal: ctrl.signal }
+        if (opts && opts.method) {
+            init.method = opts.method
+            if (opts.body != null) {
+                init.headers['Content-Type'] = 'application/json'
+                init.body = JSON.stringify(opts.body)
+            }
+        }
+        if (key) init.headers.Authorization = `Bearer ${key}`
+        const res = await fetch(BASE + urlPath, init)
         const text = await res.text()
         let body = null
         try { body = text ? JSON.parse(text) : null } catch { body = null }
@@ -107,6 +114,7 @@ function serverMessage(body, fallback) {
 }
 
 const ERROR_HINTS = {
+    402: ' (wallet balance too low — top up at OpenAlpha web → 钱包)',
     400: ' (if the message says 未配置 API Key: the user has not connected an'
         + ' exchange account yet — guide them to OpenAlpha web → 设置 → 交易所连接)',
     401: ' (key invalid or revoked — ask the user to create a new key:'
@@ -118,12 +126,16 @@ const ERROR_HINTS = {
         + ' network that can reach openalpha.top)',
 }
 
-async function api(urlPath, what) {
+async function api(urlPath, what, opts) {
     if (!API_KEY) die(configHint(), 2)
     let last
     for (let attempt = 0; attempt <= MAX_RETRY; attempt++) {
         try {
-            const { status, body, text, headers } = await fetchOnce(API_KEY, urlPath)
+            const { status, body, text, headers } =
+                await fetchOnce(API_KEY, urlPath, opts)
+            if (status === 402) {
+                die(`payment required (402): ${serverMessage(body, 'balance too low')}${ERROR_HINTS[402]}`, 1)
+            }
             if (status === 401) {
                 die(`unauthorized (401): ${serverMessage(body, 'API key invalid'
                     + ' or revoked')}${ERROR_HINTS[401]}`, 1)
@@ -198,16 +210,74 @@ function pick(obj, keys) {
 // ---------- auth/credential commands ----------
 
 function cmdLogin() {
-    const key = flags.key || pos[1]
-    if (!key || !key.startsWith('oa_')) {
-        die('usage: openalpha login --key oa_<full key>  (create one in'
-            + ' OpenAlpha web → 设置 → 安全 → API Keys)', 1)
+    const key = flags.key || (pos[1] && pos[1].startsWith('oa_') ? pos[1] : null)
+    if (key) {
+        const cfg = { ...readConfig(), apiKey: key }
+        writeConfig(cfg)
+        out(`key saved to ${CONFIG_PATH} (mode 600)`)
+        out('note: scopes are set at key creation (web or device flow).'
+            + ' verify with: openalpha whoami')
+        return
     }
-    const cfg = { ...readConfig(), apiKey: key }
-    writeConfig(cfg)
-    out(`key saved to ${CONFIG_PATH} (mode 600)`)
-    out('note: the key is READ-ONLY (server-enforced).'
-        + ' verify with: openalpha whoami')
+    loginDeviceFlow()
+}
+
+/** 设备码流: 平台签发带 scope 的 key, 浏览器一键批准, 免复制粘贴 */
+async function loginDeviceFlow() {
+    const clientName = flags.name || 'openalpha cli'
+    const scopes = ['read']
+        .concat((flags.scopes || '').split(',').map((x) => x.trim())
+            .filter((x) => x === 'ask' || x === 'deploy'))
+    const created = await rawJson('POST', '/api/auth/device-code', {
+        clientName, scopes,
+    }, 'device-code create').catch((e) => die(e.message, 1))
+    const { code, verifyUrl, expiresInSec } = created.data
+    out('Open the following URL in a browser, enter the code, and approve:')
+    out()
+    out(`  ${verifyUrl}`)
+    out(`  code: ${code}   (expires in ${expiresInSec}s)`)
+    out()
+    out('waiting for approval', '(poll every 3s; Ctrl-C to abort)...')
+    const deadline = Date.now() + (expiresInSec || 600) * 1000
+    while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 3000))
+        let poll
+        try {
+            poll = await rawJson('GET',
+                `/api/auth/device-code/${encodeURIComponent(code)}`,
+                null, 'device-code poll')
+        } catch (e) {
+            process.stderr.write(`  poll error: ${e.message} (retrying)\n`)
+            continue
+        }
+        const st = poll.data && poll.data.status
+        if (st === 'approved') {
+            const key = poll.data.key
+            if (!key) die('approved but no key returned — restart login', 1)
+            writeConfig({ ...readConfig(), apiKey: key })
+            out()
+            out(`approved. key saved to ${CONFIG_PATH} (mode 600)`)
+            out(`scopes: ${(poll.data.scopes || scopes).join(', ')}`)
+            out('verify with: openalpha whoami && openalpha overview')
+            return
+        }
+        if (st === 'denied') die('denied in browser — no key was issued', 1)
+        if (st === 'expired') die('code expired — run login again', 1)
+        process.stdout.write('.')
+    }
+    die('timed out waiting for approval — run login again', 1)
+}
+
+/** 无鉴权 JSON 请求(设备码流专用); 返回 {status,body} 形态的错误语义 */
+function rawJson(method, urlPath, body, what) {
+    return fetchOnce(null, urlPath, { method, body, timeoutMs: 10000 })
+        .then(({ status, body: b, text }) => {
+            if (status >= 400 || !b || b.success === false) {
+                throw new Error(`${what} failed (${status}):`
+                    + ` ${serverMessage(b, text.slice(0, 160))}`)
+            }
+            return b
+        })
 }
 
 function cmdLogout() {
@@ -483,6 +553,49 @@ async function cmdFactors() {
     if (filtered.length > 100) out(`... and ${filtered.length - 100} more (use --json)`)
 }
 
+/** AI 问答(需 key 带 ask scope; 按 token 计费) */
+async function cmdAsk() {
+    const question = pos.slice(1).join(' ').trim()
+    if (!question) die('usage: openalpha ask "your question"', 1)
+    const body = await api('/api/agent/ask', 'ask',
+        { method: 'POST', body: { question } })
+    if (flags.json) return json(body.data)
+    const d = body.data || {}
+    out(String(d.answer || ''))
+    out()
+    out(`--- tokens ${d.tokens} · charged $${Number(d.chargedUsd || 0).toFixed(4)}`
+        + ` · balance $${Number(d.balance || 0).toFixed(4)}`)
+}
+
+/**
+ * 部署启停(需 key 带 deploy scope)。
+ * --confirm 是硬闸: agent 协议要求先向用户复述摘要、得到明确同意后才执行
+ * (见 SKILL.md); CLI 再拦一道, 双保险。
+ */
+async function cmdDeploy() {
+    const action = pos[1]
+    const id = pos[2]
+    const allowed = ['stop', 'start', 'restart']
+    if (!allowed.includes(action) || !id) {
+        die('usage: openalpha deploy stop|start <deployment-id> --confirm', 1)
+    }
+    if (!flags.confirm) {
+        die(`refusing to ${action} deployment ${id} without --confirm.`
+            + ' Show the user a summary first; run again with --confirm'
+            + ' only after they explicitly agree.', 1)
+    }
+    const endpoint = action === 'start' ? 'restart' : action
+    const body = await api(
+        `/api/strategy-dev/deployments/${encodeURIComponent(id)}/${endpoint}`,
+        `deploy ${action}`, { method: 'POST', body: {} })
+    if (flags.json) return json(body.data)
+    const d = body.data != null && typeof body.data === 'object' ? body.data : {}
+    out(`action       ${action} ${id}`)
+    const status = d.status || (d.deployment && d.deployment.status) || 'ok'
+    out(`status       ${status}`)
+    if (d.message) out(`message      ${d.message}`)
+}
+
 // ---------- entry ----------
 
 const HELP = `openalpha — read-only CLI for OpenAlpha (AI-agent friendly)
@@ -490,7 +603,9 @@ const HELP = `openalpha — read-only CLI for OpenAlpha (AI-agent friendly)
 usage: openalpha <command> [args] [--json]
 
 account & setup:
-  login --key oa_...         save key to ~/.openalpha/config.json (mode 600)
+  login                      device-code flow: browser approval, zero copy-paste
+         [--name N] [--scopes ask,deploy]
+  login --key oa_...         save an existing key to config (mode 600)
   logout                     remove saved key (revoke it in the web too)
   status                     where is the key coming from / base url
   whoami                     current user, plan and auth method
@@ -501,6 +616,12 @@ monitoring:
   balance [--exchange X]     equity + today PnL (DEFAULT LIVE; --demo / --both)
   positions [--exchange X]   open positions (DEFAULT LIVE; --demo to switch)
            [--demo] [--symbol S]
+
+actions & ai (need matching key scope):
+  ask "question"             platform AI Q&A with live account context
+                             (billed per token; scope: ask)
+  deploy stop|start <id>     stop / restart a strategy deployment
+         --confirm           (scope: deploy; --confirm required)
 
 deployments & research:
   deployments                strategy deployments (executor curve metrics)
@@ -527,6 +648,8 @@ withdrawals or config changes are possible through this CLI. Rate limit:
 
 const handlers = {
     login: cmdLogin,
+    ask: cmdAsk,
+    deploy: cmdDeploy,
     logout: cmdLogout,
     status: cmdStatus,
     whoami: cmdWhoami,

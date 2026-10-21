@@ -10,7 +10,8 @@ listed here**, and never silently retry a 4xx.
 |--------|---------|----------------------|
 | 400 with `未配置 API Key` | The user has NOT connected an exchange account (or not for that side). This is the **most common state for new users** — it is not a bug and not a key problem. | "你还没在 OpenAlpha 连接交易所账户 — 网页端 → 设置 → 交易所连接 配置 OKX/币安 API Key 后再来查。" Do not retry. |
 | 401 | Key invalid or revoked (or user disabled/deleted). | Ask the user to create a new key (设置 → 安全 → API Keys) and `openalpha login --key oa_...` again. Do not retry. |
-| 403 | Server-enforced read-only wall (non-GET attempt), or key-managing-key. | Explain the boundary; state-changing actions go to the web UI. Never retry with different methods to work around. |
+| 402 | Platform wallet balance too low for a billed action (`ask`). | "AI 问答需要平台钱包正余额 — 网页端 → 钱包 充值后再试。" Do not retry. |
+| 403 | Scope wall: the request (non-GET) is outside the key's scope allowlist (`API_KEY_SCOPE_DENIED`), or key-managing-key. | Name the missing scope (ask/deploy); key scopes are fixed at creation — 设置 → 安全 → API Keys. Never retry with different methods to work around. |
 | 429 | Rate limit: **60 requests/min per key**. Response carries `Retry-After`. | Stop, wait the given seconds, then slow the polling loop (e.g. ≥ 2 min interval for watch tasks). |
 | 451 | Mainland-China IP blocked by platform policy. | "当前网络被平台地区策略拦截(451)。换一个能访问 openalpha.top 的网络环境。" Do NOT attempt proxies or circumvention — that violates platform policy. |
 | 5xx | Platform-side error (CLI retries once automatically). | Report as platform error; suggest trying again later. |

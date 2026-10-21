@@ -99,9 +99,69 @@ const fixtures = {
 
 // ---------- fixture server ----------
 
+/** 设备码状态机: create → poll#1 pending → poll#2 approved(带 key) */
+const deviceState = { created: false, polls: 0 }
+const DEVICE_KEY = 'oa_fixture000000000000000000device'
+
+let reqBody = ''
 const server = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x')
     const auth = req.headers.authorization || ''
+    req.on('data', (c) => { reqBody += c })
+    req.on('end', handle)
+    function handle() {
+        let body = {}
+        try { body = reqBody ? JSON.parse(reqBody) : {} } catch { body = {} }
+        reqBody = ''
+        const reply = (status, obj) => {
+            res.writeHead(status, { 'content-type': 'application/json' })
+            res.end(JSON.stringify(obj))
+        }
+        if (u.pathname === '/api/auth/device-code' && req.method === 'POST') {
+            deviceState.created = true
+            deviceState.polls = 0
+            return reply(201, { success: true, data: {
+                code: 'TEST-CODE', verifyUrl:
+                    'https://openalpha.top/auth/device?code=TEST-CODE',
+                expiresInSec: 600 } })
+        }
+        if (u.pathname === '/api/auth/device-code/TEST-CODE'
+            && req.method === 'GET') {
+            deviceState.polls += 1
+            if (deviceState.polls >= 2) {
+                return reply(200, { success: true, data: {
+                    status: 'approved', key: DEVICE_KEY,
+                    scopes: ['read', 'ask'] } })
+            }
+            return reply(200, { success: true, data: { status: 'pending' } })
+        }
+        if (u.pathname === '/api/agent/ask' && req.method === 'POST') {
+            if (auth !== `Bearer ${KEY}`) {
+                return reply(401, { success: false, message: 'unauthorized' })
+            }
+            if (String(body.question || '').includes('poor')) {
+                return reply(402, { success: false, error: {
+                    kind: 'HTTP',
+                    message: '钱包余额不足：AI 问答需要正余额。',
+                    code: 'AGENT_ASK_NO_BALANCE' } })
+            }
+            return reply(200, { success: true, data: {
+                answer: '你的部署全部健康(基于真实上下文)。',
+                tokens: 1200, chargedUsd: 0.0024, balance: 4.9976 } })
+        }
+        const mDep = u.pathname.match(
+            /^\/api\/strategy-dev\/deployments\/([^/]+)\/(stop|restart)$/)
+        if (mDep && req.method === 'POST') {
+            if (auth !== `Bearer ${KEY}`) {
+                return reply(401, { success: false, message: 'unauthorized' })
+            }
+            return reply(200, { success: true, data: {
+                status: mDep[2] === 'stop' ? 'stopped' : 'running' } })
+        }
+        route(req, res)
+    }
+    // 原 GET 逻辑保留在 route()
+    function route(req, res) {
     // positions 特例: demo=true 返回未配置(高频真实状态); 其它按表
     if (u.pathname === '/api/trade/positions') {
         if (auth !== `Bearer ${KEY}`) {
@@ -137,6 +197,7 @@ const server = http.createServer((req, res) => {
     }
     res.writeHead(200, { 'content-type': 'application/json' })
     res.end(JSON.stringify(body))
+    }
 })
 
 // ---------- harness ----------
@@ -228,6 +289,36 @@ server.listen(0, '127.0.0.1', async () => {
         ['reversal7'])
     await check('help lists overview/login', ['help'], E, 0,
         ['overview', 'login --key', 'READ-ONLY'])
+
+    // ---- ask / deploy (scoped actions) ----
+    await check('ask renders answer + billing footer', ['ask', '我的部署健康吗'], E, 0,
+        ['你的部署全部健康', 'tokens 1200', 'charged $0.0024', 'balance $4.9976'])
+    await check('ask 402 surfaces wallet guidance', ['ask', 'poor question'], E, 1,
+        ['402', '钱包余额不足', '钱包'])
+    await check('deploy refuses without --confirm', ['deploy', 'stop', 'dep-1'], E, 1,
+        ['without --confirm', 'explicitly agree'])
+    await check('deploy stop --confirm executes', ['deploy', 'stop', 'dep-1', '--confirm'], E, 0,
+        ['action       stop dep-1', 'status       stopped'])
+    await check('deploy start maps to restart', ['deploy', 'start', 'dep-9', '--confirm'], E, 0,
+        ['status       running'])
+
+    // ---- device-code login flow (独立 HOME, 夹具两轮轮询后 approved) ----
+    const devHome = fs.mkdtempSync(path.join(os.tmpdir(), 'oa-dev-login-'))
+    const devEnv = {
+        OPENALPHA_BASE_URL: `http://127.0.0.1:${server.address().port}`,
+        HOME: devHome,
+    }
+    await check('login device flow: approve → config saved',
+        ['login', '--name', 'golden-test'], devEnv, 0,
+        ['TEST-CODE', 'approved', 'key saved to', 'scopes: read, ask'])
+    const devCfg = JSON.parse(
+        fs.readFileSync(path.join(devHome, '.openalpha', 'config.json'), 'utf8'))
+    if (devCfg.apiKey === DEVICE_KEY) {
+        passes++; console.log('ok   device key persisted correctly')
+    } else {
+        failures++; console.error('FAIL device key mismatch:', devCfg.apiKey)
+    }
+    fs.rmSync(devHome, { recursive: true, force: true })
 
     // ---- credential flows (config file; env removed) ----
     const noKeyEnv = {

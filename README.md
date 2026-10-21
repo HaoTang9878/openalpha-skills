@@ -25,6 +25,16 @@ skill 使用的 API Key 是**服务端强制的只读凭证**——后端在协�
 两者服务端都有确认体系;差别在**范围**——Minara v1 就开放了托管账户的交易,
 我们 v1 只开放监控。这是阶段取舍,不是谁更安全。
 
+## v1.2.0 新增
+
+- **`ask "问题"`** — 平台 AI 问答, 服务端注入你的实时账户上下文, 按 token
+  真实用量计费(与网页 AI 同一钱包)。需 key 带 `ask` 分档。
+- **`deploy stop|start <id> --confirm`** — 受控部署启停(key 需 `deploy` 分档;
+  仅这两个端点; CLI 无 `--confirm` 拒绝执行, 配合 SKILL 的两段式确认协议)。
+- **`openalpha login` 设备码流** — 无参 login 即发起: 打开浏览器批准链接,
+  CLI 轮询自动拿 key 落盘, 零复制粘贴。
+- **scope 分档** — read / ask / deploy, 创建时勾选, 服务端白名单强制。
+
 ## 功能
 
 - **`overview` 一发入魂** — 跨所总权益/今日盈亏/部署真实曲线指标/异常清单,
@@ -62,6 +72,7 @@ openalpha overview
 openalpha balance --exchange binance        # 默认实盘侧
 openalpha positions                         # 默认 LIVE, --demo 切模拟
 openalpha deployments                       # 策略部署+曲线指标
+openalpha ask "我的部署健康吗"          # 平台 AI(计费, 需 ask scope)
 openalpha strategies                        # 策略市场
 openalpha factors 动量                       # 因子库
 ```
@@ -91,10 +102,9 @@ openalpha factors 动量                       # 因子库
 
 ## Roadmap(诚实版)
 
-- [ ] `ask` — 把平台 AI 策略工作流接入 skill(计费设计先行)
-- [ ] 受控写入 — 分档确认下的部署启停(服务端权限体系,非 prompt 自律)
-- [ ] device-code 登录流(浏览器点一下,免复制粘贴)
-- [ ] key TTL / scope / 审计日志
+- [x] ~~ask 计费接入~~ / ~~受控部署启停~~ / ~~device-code 登录~~ (v1.2.0)
+- [ ] key TTL / 审计日志(调用明细)
+- [ ] 策略工作流级 AI(生成/回测编排, 走平台四档确认)
 - [ ] ClawHub / npm 分发
 
 ## License
