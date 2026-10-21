@@ -553,12 +553,15 @@ async function cmdFactors() {
     if (filtered.length > 100) out(`... and ${filtered.length - 100} more (use --json)`)
 }
 
-/** AI 问答(需 key 带 ask scope; 按 token 计费) */
+/** AI 问答(需 key 带 ask scope; 按 token 计费, requestId 幂等防重扣) */
 async function cmdAsk() {
     const question = pos.slice(1).join(' ').trim()
     if (!question) die('usage: openalpha ask "your question"', 1)
+    // 服务端幂等: 同 requestId 同问题重试复用结果(网络重试不重复扣费)
+    const requestId = 'cli-' + Date.now().toString(36) + '-'
+        + Math.random().toString(36).slice(2, 8)
     const body = await api('/api/agent/ask', 'ask',
-        { method: 'POST', body: { question } })
+        { method: 'POST', body: { question, requestId } })
     if (flags.json) return json(body.data)
     const d = body.data || {}
     out(String(d.answer || ''))
@@ -596,6 +599,25 @@ async function cmdDeploy() {
     if (d.message) out(`message      ${d.message}`)
 }
 
+/** 双所新上市 USDT 永续雷达(池准入信号) */
+async function cmdMarket() {
+    const sub = pos[1] || 'listings'
+    if (sub !== 'listings') die('usage: openalpha market listings [--days N]', 1)
+    const days = Number(flags.days) || 14
+    const body = await api(
+        `/api/agent/market/listings?days=${encodeURIComponent(days)}`,
+        'market listings')
+    if (flags.json) return json(body.data)
+    const d = body.data || {}
+    const list = d.listings || []
+    out(`近 ${d.windowDays || days} 天新上市 USDT 永续(双所合计 ${list.length} 个)`)
+    for (const e of d.errors || []) out(`! 数据降级: ${e}`)
+    if (list.length === 0) { out('  无'); return }
+    row(['exchange', 'symbol', 'days'], [9, 24, 6])
+    for (const r of list) row([r.exchange, r.symbol, r.daysListed], [9, 24, 6])
+    out('(新币波动/流动性结构特殊 —— 进池前先观察, 上市效应是真实信号也是真实风险)')
+}
+
 // ---------- entry ----------
 
 const HELP = `openalpha — read-only CLI for OpenAlpha (AI-agent friendly)
@@ -616,6 +638,10 @@ monitoring:
   balance [--exchange X]     equity + today PnL (DEFAULT LIVE; --demo / --both)
   positions [--exchange X]   open positions (DEFAULT LIVE; --demo to switch)
            [--demo] [--symbol S]
+
+market radar:
+  market listings [--days N]  newly listed USDT perps on OKX/Binance
+                             (pool-admission signal; default 14d)
 
 actions & ai (need matching key scope):
   ask "question"             platform AI Q&A with live account context
@@ -650,6 +676,7 @@ const handlers = {
     login: cmdLogin,
     ask: cmdAsk,
     deploy: cmdDeploy,
+    market: cmdMarket,
     logout: cmdLogout,
     status: cmdStatus,
     whoami: cmdWhoami,

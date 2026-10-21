@@ -74,6 +74,7 @@ openalpha positions                         # 默认 LIVE, --demo 切模拟
 openalpha deployments                       # 策略部署+曲线指标
 openalpha ask "我的部署健康吗"          # 平台 AI(计费, 需 ask scope)
 openalpha strategies                        # 策略市场
+openalpha market listings                  # 新上市永续雷达
 openalpha factors 动量                       # 因子库
 ```
 
@@ -103,6 +104,7 @@ openalpha factors 动量                       # 因子库
 ## Roadmap(诚实版)
 
 - [x] ~~ask 计费接入~~ / ~~受控部署启停~~ / ~~device-code 登录~~ (v1.2.0)
+- [x] ~~ask requestId 幂等(重试不重复扣费) / 市场上下文增富(恐贪·trending·链TVL) / 双所新上市永续雷达 / key 删除 2FA 闸~~ (v1.3.0)
 - [ ] key TTL / 审计日志(调用明细)
 - [ ] 策略工作流级 AI(生成/回测编排, 走平台四档确认)
 - [ ] ClawHub / npm 分发

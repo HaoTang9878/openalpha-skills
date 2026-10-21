@@ -2,11 +2,11 @@
 # OpenAlpha skill installer for Claude Code
 # Pinned to a release tag by default (main is mutable; tags are the contract).
 # Override with: OPENALPHA_SKILL_REF=v1.0.0 bash ... (use "main" for bleeding edge)
-# Usage:  curl -fsSL https://raw.githubusercontent.com/HaoTang9878/openalpha-skills/v1.1.0/scripts/claudecode-openalpha-skill-setup.sh | bash
+# Usage:  curl -fsSL https://raw.githubusercontent.com/HaoTang9878/openalpha-skills/v1.3.0/scripts/claudecode-openalpha-skill-setup.sh | bash
 set -euo pipefail
 
 REPO="HaoTang9878/openalpha-skills"
-REF="${OPENALPHA_SKILL_REF:-v1.1.0}"
+REF="${OPENALPHA_SKILL_REF:-v1.3.0}"
 DEST="${HOME}/.claude/skills/openalpha"
 
 echo "[openalpha-skill] installing ${REF} to ${DEST}"

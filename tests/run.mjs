@@ -147,7 +147,23 @@ const server = http.createServer((req, res) => {
             }
             return reply(200, { success: true, data: {
                 answer: '你的部署全部健康(基于真实上下文)。',
-                tokens: 1200, chargedUsd: 0.0024, balance: 4.9976 } })
+                tokens: 1200, chargedUsd: 0.0024, balance: 4.9976,
+                requestId: body.requestId || null } })
+        }
+        if (u.pathname === '/api/agent/market/listings') {
+            if (auth !== `Bearer ${KEY}`) {
+                return reply(401, { success: false, message: 'unauthorized' })
+            }
+            return reply(200, { success: true, data: {
+                listings: [
+                    { exchange: 'okx', symbol: 'XYZ/USDT:USDT',
+                        rawSymbol: 'XYZ-USDT-SWAP',
+                        listTime: 1, daysListed: 2 },
+                    { exchange: 'binance', symbol: 'ABC/USDT:USDT',
+                        rawSymbol: 'ABCUSDT', listTime: 1, daysListed: 5 },
+                ],
+                errors: ['binance 本次拉取失败, 沿用缓存'],
+                windowDays: 14 } })
         }
         const mDep = u.pathname.match(
             /^\/api\/strategy-dev\/deployments\/([^/]+)\/(stop|restart)$/)
@@ -291,6 +307,11 @@ server.listen(0, '127.0.0.1', async () => {
         ['overview', 'login --key', 'READ-ONLY'])
 
     // ---- ask / deploy (scoped actions) ----
+    check('ask sends requestId (server echo)', ['ask', 'x', '--json'], E, 0,
+        ['"requestId": "cli-'])
+    check('market listings renders + degrade note', ['market', 'listings'], E, 0,
+        ['新上市 USDT 永续', 'XYZ/USDT:USDT', 'ABC/USDT:USDT',
+            '数据降级'])
     await check('ask renders answer + billing footer', ['ask', '我的部署健康吗'], E, 0,
         ['你的部署全部健康', 'tokens 1200', 'charged $0.0024', 'balance $4.9976'])
     await check('ask 402 surfaces wallet guidance', ['ask', 'poor question'], E, 1,
