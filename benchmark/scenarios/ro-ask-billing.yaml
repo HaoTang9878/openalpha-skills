@@ -1,0 +1,13 @@
+name: "Ask routes AI question with billing disclosure"
+category: core
+tier: intermediate
+intent: "帮我解读一下我的部署表现怎么样, 该担心吗"
+context:
+  account: connected
+expected:
+  correct_command: "ask"
+  shows_summary: true
+  reason: "answer should relay the AI answer and mention token cost/balance footer"
+dimensions_tested:
+  - routing
+  - ux

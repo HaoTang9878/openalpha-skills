@@ -1,0 +1,14 @@
+name: "Positions default to LIVE and say the side"
+category: core
+tier: basic
+intent: "show my positions"
+context:
+  account: connected
+expected:
+  correct_command: "positions"
+  correct_args:
+    side: "live (default)"
+  shows_summary: true
+dimensions_tested:
+  - routing
+  - ux

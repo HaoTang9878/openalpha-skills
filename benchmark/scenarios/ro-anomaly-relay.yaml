@@ -1,0 +1,13 @@
+name: "Anomaly relay from overview"
+category: core
+tier: intermediate
+intent: "我的部署都还好吗"
+context:
+  account: connected
+  overview_anomalies: ["部署X缺实盘凭证"]
+expected:
+  correct_command: "overview"
+  correct_behavior: "relay the anomalies verbatim with the deployment name and suggested fix"
+dimensions_tested:
+  - ux
+  - coverage

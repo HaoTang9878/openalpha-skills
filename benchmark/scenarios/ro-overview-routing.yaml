@@ -1,0 +1,13 @@
+name: "Overview routing for account health"
+category: core
+tier: basic
+intent: "how is my OpenAlpha account doing today"
+context:
+  account: connected
+expected:
+  correct_command: "overview"
+  shows_summary: true
+  must_not_do: "manually summing balance numbers from multiple commands"
+dimensions_tested:
+  - routing
+  - ux

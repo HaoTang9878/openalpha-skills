@@ -1,0 +1,10 @@
+name: "Demo side explicit switch"
+category: core
+tier: basic
+intent: "看看模拟盘的持仓"
+context:
+  account: connected
+expected:
+  correct_command: "positions --demo"
+dimensions_tested:
+  - routing

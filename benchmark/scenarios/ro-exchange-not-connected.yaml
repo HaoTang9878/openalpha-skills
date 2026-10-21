@@ -1,0 +1,12 @@
+name: "Exchange not connected guidance"
+category: core
+tier: basic
+intent: "查一下我的余额"
+context:
+  account: not_connected
+  note: "CLI returns 400 未配置 API Key"
+expected:
+  correct_behavior: "explain the user has not connected an exchange account and guide to OpenAlpha web settings; do not retry; do not invent numbers"
+dimensions_tested:
+  - robustness
+  - ux
