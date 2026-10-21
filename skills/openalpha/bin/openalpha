@@ -132,7 +132,13 @@ function row(cols, widths) {
 
 function pick(obj, keys) {
     for (const k of keys) {
-        if (obj && obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k]
+        const v = obj ? obj[k] : undefined
+        if (v !== undefined && v !== null && v !== '') {
+            if (typeof v === 'object') {
+                return v.name || v.username || v.displayName || v.label || JSON.stringify(v)
+            }
+            return v
+        }
     }
     return null
 }
@@ -229,7 +235,7 @@ async function cmdStrategies() {
     const raw = body.data
     const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.strategies) ? raw.strategies : [])
     if (list.length === 0) { out('no strategies'); return }
-    row(['id', 'name', 'creator', 'return', 'annual', 'sharpe', 'maxDD'], [14, 24, 14, 10, 10, 8, 10])
+    row(['id', 'name', 'creator', 'return%', 'annual%', 'sharpe', 'maxDD%'], [14, 24, 14, 10, 10, 8, 10])
     for (const s of list) {
         row([
             pick(s, ['id', 'strategyId']),
@@ -259,9 +265,14 @@ async function cmdFactors() {
         ? list.filter((f) => JSON.stringify(f).toLowerCase().includes(q))
         : list
     if (filtered.length === 0) { out(`no factors${q ? ` matching "${q}"` : ''}`); return }
-    row(['name', 'category', 'ic'], [28, 18, 10])
+    row(['id', 'label', 'group', 'ready'], [22, 26, 20, 7])
     for (const f of filtered.slice(0, 100)) {
-        row([pick(f, ['name', 'factorName']), pick(f, ['category', 'type']), pick(f, ['ic'])], [28, 18, 10])
+        row([
+            pick(f, ['id', 'name']),
+            pick(f, ['label', 'name']),
+            pick(f, ['group', 'category', 'type']),
+            f && f.implemented === true ? 'yes' : 'no',
+        ], [22, 26, 20, 7])
     }
     if (filtered.length > 100) out(`... and ${filtered.length - 100} more (use --json)`)
 }
