@@ -1,0 +1,26 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  golden-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: CLI golden tests (fixture server)
+        run: node tests/run.mjs
+      - name: version-check script is executable & parses
+        run: |
+          bash -n skills/openalpha/scripts/version-check.sh
+          test -x skills/openalpha/scripts/version-check.sh
+      - name: installer script parses
+        run: bash -n scripts/claudecode-openalpha-skill-setup.sh

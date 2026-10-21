@@ -1,40 +1,58 @@
-# Deployments
+# Deployments & bots
 
-> A "deployment" is a running strategy instance: the platform's executor
-> rebalances the user's connected exchange account on a schedule (UTC 0:00)
-> according to the strategy's target portfolio. All commands read-only.
+> Two product lines, two commands. All read-only.
+> - `deployments` — **cross-sectional strategy deployments** (磐石-style):
+>   the platform executor rebalances the user's exchange account daily
+>   (UTC 0:00) toward the strategy's target portfolio.
+> - `bots` — V40 **orderflow bots** (per-symbol, e.g. 以太坊订单流).
+
+## `overview` covers both
+
+For "is everything OK" start with `overview` (references/overview.md): it
+lists deployments with server-computed metrics plus an anomaly list, and a
+`bots` running count. Use the commands below for depth.
 
 ## `deployments`
 
-List the user's deployments.
-
 ```
 $ openalpha deployments
-id             name                    status     exchange   demo    strategy
-dep_abc123     磐石-防御档             running    okx        false   panshi_defensive
+id      name             status  exch  mode  equity       return
+dep-1   磐石IC 4.0       running okx   live  $12,345.00   10.00%
 ```
 
-- `status` values include `running` / `stopped` (exact set may grow — with
-  unexpected values prefer `--json`).
-- A `stopped` deployment is not necessarily a problem; report, don't alarm.
+- `equity`/`return` derive from the **executor's real equity curve** (not
+  backtests). Rows with <2 curve points show `—` (insufficient sample —
+  not zero).
+- `!` after status = marked running but executor process is not alive.
+- `annual` lives in `overview` (needs ≥7 days of samples).
 
 ## `deployment <id>`
 
-Full JSON detail of one deployment (config, status, event log). JSON is the
-contract here — parse it, pick the fields relevant to the user's question
-(status, events timeline, strategy config), and summarize in prose.
+Full JSON of one deployment, including `live` (executor state with
+`equityCurve`, last rebalances) and `logTail` (recent executor output).
+Parse and summarize the fields relevant to the question — status, events,
+curve start/end. For metric math reuse `overview`'s numbers instead of
+recomputing.
+
+Health checklist when the user asks "还活着吗":
+1. `status === 'running'` and no `!`
+2. `credentialOk` true (else the executor silently skips every rebalance —
+   the anomaly list in `overview` names this exactly)
+3. curve's last point is recent (not stuck days ago)
+
+## `bots`
 
 ```
-$ openalpha deployment dep_abc123 --json
+$ openalpha bots
+id              name        status    exchange   mode
+bot-116b4a70-7  以太坊订单流  running   okx        live
 ```
 
-Useful checks when the user asks "is everything OK":
-1. status is `running`
-2. the events log shows normal rebalance entries, not repeated errors
-3. cross-check `positions --live` to see the deployment's symbols actually held
+Per-symbol V40 orderflow bots. `overview` gives the running/total count;
+use this for the list.
 
 ## Boundary
 
-Starting/stopping/redeploying is **not possible via this skill** (server-side
-read-only enforcement). If the user asks for it: confirm you understood,
-then point them to OpenAlpha web → 部署 page. Do not retry against the API.
+Start/stop/redeploy are **not possible via this skill** (server-enforced).
+If asked: confirm understanding, point to OpenAlpha web → 部署 page. Do not
+retry against the API.
