@@ -1,9 +1,9 @@
 ---
 name: openalpha
-version: "1.3.0"
+version: "1.4.0"
 description: "Quant strategy platform via OpenAlpha CLI: monitoring (overview one-shot with server-side math, balances, positions, deployments, strategy market, factor library), platform AI Q&A with live account context (`ask`, billed per token), and scoped deployment control (`deploy stop|start`, --confirm required). Scopes are server-enforced: read (default) / ask / deploy — a key cannot do what its scope does not allow, and no key can place orders, move funds or change configuration. Use when: (1) OpenAlpha is mentioned (openalpha.top, 磐石/Panshi), (2) the user asks about their quant account/equity/positions/deployments ('how is my account doing', '查账户', '盯盘'), (3) asking the platform AI to analyze their account, (4) stopping/restarting a misbehaving deployment, (5) strategy market / factor research, (6) scheduled watchdog reporting. Do NOT activate for generic crypto education or trading on other platforms."
 homepage: https://openalpha.top
-metadata: { "version": "1.3.0" }
+metadata: { "version": "1.4.0" }
 ---
 
 # OpenAlpha — your agent's read-only window into a quant strategy platform

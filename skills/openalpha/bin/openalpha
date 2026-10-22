@@ -70,6 +70,8 @@ for (let i = 0; i < argv.length; i++) {
     else if (a === '--demo') flags.demo = true
     else if (a === '--both') flags.both = true
     else if (a === '--confirm') flags.confirm = true
+    else if (a === '--new') flags.new = true
+    else if (a === '--bg') flags.bg = true
     else if (a === '--key') { i++; flags.key = argv[i] }
     else if (a.startsWith('--')) { flags[a.slice(2)] = argv[i + 1]; i++ }
     else pos.push(a)
@@ -560,14 +562,54 @@ async function cmdAsk() {
     // 服务端幂等: 同 requestId 同问题重试复用结果(网络重试不重复扣费)
     const requestId = 'cli-' + Date.now().toString(36) + '-'
         + Math.random().toString(36).slice(2, 8)
+    // 会话连续性: 默认接续上次会话(--new 重开); 服务端注入近 3 轮
+    const statePath = path.join(path.dirname(CONFIG_PATH), 'state.json')
+    let conversationId = ''
+    if (!flags.new) {
+        try {
+            conversationId = JSON.parse(
+                fs.readFileSync(statePath, 'utf8')).lastConversationId || ''
+        } catch { /* 无状态文件即新会话 */ }
+    }
+    if (flags.new || !conversationId) {
+        conversationId = 'conv-' + Date.now().toString(36)
+    }
+    const reqBody = { question, requestId, conversationId }
+    if (flags.bg) reqBody.background = true
     const body = await api('/api/agent/ask', 'ask',
-        { method: 'POST', body: { question, requestId } })
-    if (flags.json) return json(body.data)
-    const d = body.data || {}
-    out(String(d.answer || ''))
+        { method: 'POST', body: reqBody })
+    if (body.data && body.data.status === 'running' && body.data.statusUrl) {
+        out(`(background job ${body.data.id}, polling...)`)
+        for (let i = 0; i < 120; i++) {
+            await new Promise((r) => setTimeout(r, 3000))
+            const pollBody = await api(body.data.statusUrl, 'ask poll')
+            const st = pollBody.data && pollBody.data.status
+            if (st === 'done') {
+                printAskResult(pollBody.data.result, conversationId, statePath)
+                return
+            }
+            if (st === 'failed') {
+                die(`background ask failed: ${
+                    pollBody.data.error || 'unknown'}`, 1)
+            }
+        }
+        die('background ask timed out (6min)', 1)
+    }
+    printAskResult(body.data, conversationId, statePath)
+}
+
+function printAskResult(d, conversationId, statePath) {
+    if (flags.json) return json(d)
+    out(String((d && d.answer) || ''))
     out()
     out(`--- tokens ${d.tokens} · charged $${Number(d.chargedUsd || 0).toFixed(4)}`
-        + ` · balance $${Number(d.balance || 0).toFixed(4)}`)
+        + ` · balance $${Number(d.balance || 0).toFixed(4)}`
+        + ` · conversation ${conversationId}`)
+    try {
+        fs.mkdirSync(path.dirname(statePath), { recursive: true })
+        fs.writeFileSync(statePath,
+            JSON.stringify({ lastConversationId: conversationId }, null, 2))
+    } catch { /* 状态写失败只影响下次连续性 */ }
 }
 
 /**
@@ -645,7 +687,9 @@ market radar:
 
 actions & ai (need matching key scope):
   ask "question"             platform AI Q&A with live account context
-                             (billed per token; scope: ask)
+         [--new] [--bg]      (billed per token; scope: ask; continuous
+                             conversation by default, --new resets, --bg
+                             runs async with polling)
   deploy stop|start <id>     stop / restart a strategy deployment
          --confirm           (scope: deploy; --confirm required)
 

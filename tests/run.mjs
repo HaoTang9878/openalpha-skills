@@ -309,6 +309,19 @@ server.listen(0, '127.0.0.1', async () => {
     // ---- ask / deploy (scoped actions) ----
     check('ask sends requestId (server echo)', ['ask', 'x', '--json'], E, 0,
         ['"requestId": "cli-'])
+    // 会话连续性: 第一次写 state, 第二次请求体带同一 conversationId
+    const askHome = fs.mkdtempSync(path.join(os.tmpdir(), 'oa-ask-conv-'))
+    const askEnv = { ...E, HOME: askHome }
+    await check('ask first call seeds conversation',
+        ['ask', '你好'], askEnv, 0, ['全部健康'])
+    const st1 = JSON.parse(fs.readFileSync(
+        path.join(askHome, '.openalpha', 'state.json'), 'utf8'))
+    if (st1.lastConversationId && st1.lastConversationId.startsWith('conv-')) {
+        passes++; console.log('ok   conversation state seeded')
+    } else { failures++; console.error('FAIL state:', JSON.stringify(st1)) }
+    await check('ask second call continues conversation',
+        ['ask', '再说点'], askEnv, 0, ['全部健康'])
+    fs.rmSync(askHome, { recursive: true, force: true })
     check('market listings renders + degrade note', ['market', 'listings'], E, 0,
         ['新上市 USDT 永续', 'XYZ/USDT:USDT', 'ABC/USDT:USDT',
             '数据降级'])

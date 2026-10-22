@@ -105,6 +105,7 @@ openalpha factors 动量                       # 因子库
 
 - [x] ~~ask 计费接入~~ / ~~受控部署启停~~ / ~~device-code 登录~~ (v1.2.0)
 - [x] ~~ask requestId 幂等(重试不重复扣费) / 市场上下文增富(恐贪·trending·链TVL) / 双所新上市永续雷达 / key 删除 2FA 闸~~ (v1.3.0)
+- [x] ~~ask 对话连续性(conversationId 近 3 轮) + background 异步模式(202+轮询) + 首轮基准跑分与安全修复~~ (v1.4.0)
 - [ ] key TTL / 审计日志(调用明细)
 - [ ] 策略工作流级 AI(生成/回测编排, 走平台四档确认)
 - [ ] ClawHub / npm 分发
